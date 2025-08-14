@@ -323,14 +323,18 @@ class _State extends State<Lottie> {
 }
 
 class TVGCanvas extends CustomPainter {
-  TVGCanvas(
-      {required this.image,
-      required this.width,
-      required this.height,
-      required this.lottieWidth,
-      required this.lottieHeight,
-      required this.renderWidth,
-      required this.renderHeight});
+  TVGCanvas({
+    required this.image,
+    required this.width,
+    required this.height,
+    required this.lottieWidth,
+    required this.lottieHeight,
+    required this.renderWidth,
+    required this.renderHeight,
+    this.fit = BoxFit.none,
+    this.filterQuality = FilterQuality.high,
+    this.alignment = Alignment.center,
+  });
 
   double width;
   double height;
@@ -343,6 +347,10 @@ class TVGCanvas extends CustomPainter {
 
   ui.Image image;
 
+  BoxFit fit;
+  FilterQuality filterQuality;
+  Alignment alignment;
+
   @override
   void paint(Canvas canvas, Size size) {
     final left = renderWidth > width ? 0.0 : (width - renderWidth) / 2;
@@ -352,9 +360,9 @@ class TVGCanvas extends CustomPainter {
       canvas: canvas,
       rect: Rect.fromLTWH(left, top, renderWidth, renderHeight),
       image: image,
-      fit: BoxFit.none, //NOTE: Should make it a param
-      filterQuality: FilterQuality.high, //NOTE: Should make it a param
-      alignment: Alignment.center, //NOTE: Should make it a param
+      fit: fit,
+      filterQuality: filterQuality,
+      alignment: alignment,
     );
   }
 
