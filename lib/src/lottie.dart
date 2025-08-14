@@ -368,6 +368,9 @@ class TVGCanvas extends CustomPainter {
 
   @override
   bool shouldRepaint(TVGCanvas oldDelegate) {
-    return image != oldDelegate.image;
+    return image != oldDelegate.image ||
+        fit != oldDelegate.fit ||
+        filterQuality != oldDelegate.filterQuality ||
+        alignment != oldDelegate.alignment;
   }
 }
