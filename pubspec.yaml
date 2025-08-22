@@ -12,6 +12,7 @@ dependencies:
   ffi: ^2.1.2
   flutter:
     sdk: flutter
+  plugin_platform_interface: ^2.1.8
 
 dev_dependencies:
   ffigen: ^9.0.0
@@ -26,3 +27,6 @@ flutter:
         ffiPlugin: true
       ios:
         ffiPlugin: true
+      web:
+        pluginClass: ThorvgFlutterWeb
+        fileName: src/web/thorvg_flutter_web.dart
