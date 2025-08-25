@@ -350,9 +350,10 @@ class TVGCanvas extends CustomPainter {
 
     paintImage(
       canvas: canvas,
-      rect: Rect.fromLTWH(left, top, renderWidth, renderHeight),
+      // rect: Rect.fromLTWH(left, top, renderWidth, renderHeight),
+      rect: Offset.zero & size,
       image: image,
-      fit: BoxFit.none, //NOTE: Should make it a param
+      fit: BoxFit.contain, //NOTE: Should make it a param
       filterQuality: FilterQuality.high, //NOTE: Should make it a param
       alignment: Alignment.center, //NOTE: Should make it a param
     );
