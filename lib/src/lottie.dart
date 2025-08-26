@@ -372,6 +372,8 @@ class TVGCanvas extends CustomPainter {
     if (hasChanged)
       debugPrint(
           '[*] shouldRepaint: image? ${image != oldDelegate.image}, fit? ${fit != oldDelegate.fit}, align? ${alignment != oldDelegate.alignment}');
+    debugPrint(
+        '[*] hash compare : ${oldDelegate.hashCode != hashCode} oldHash : ${oldDelegate.hashCode} / newHash : ${hashCode}');
     return image != oldDelegate.image ||
         fit != oldDelegate.fit ||
         alignment != oldDelegate.alignment;
