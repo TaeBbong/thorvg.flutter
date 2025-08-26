@@ -332,7 +332,6 @@ class TVGCanvas extends CustomPainter {
     required this.renderWidth,
     required this.renderHeight,
     this.fit = BoxFit.none,
-    this.filterQuality = FilterQuality.high,
     this.alignment = Alignment.center,
   });
 
@@ -348,7 +347,6 @@ class TVGCanvas extends CustomPainter {
   ui.Image image;
 
   BoxFit fit;
-  FilterQuality filterQuality;
   Alignment alignment;
 
   @override
@@ -361,16 +359,21 @@ class TVGCanvas extends CustomPainter {
       rect: Rect.fromLTWH(left, top, renderWidth, renderHeight),
       image: image,
       fit: fit,
-      filterQuality: filterQuality,
+      filterQuality: FilterQuality.high,
       alignment: alignment,
     );
   }
 
   @override
   bool shouldRepaint(TVGCanvas oldDelegate) {
+    bool hasChanged = image != oldDelegate.image ||
+        fit != oldDelegate.fit ||
+        alignment != oldDelegate.alignment;
+    if (hasChanged)
+      debugPrint(
+          '[*] shouldRepaint: image? ${image != oldDelegate.image}, fit? ${fit != oldDelegate.fit}, align? ${alignment != oldDelegate.alignment}');
     return image != oldDelegate.image ||
         fit != oldDelegate.fit ||
-        filterQuality != oldDelegate.filterQuality ||
         alignment != oldDelegate.alignment;
   }
 }

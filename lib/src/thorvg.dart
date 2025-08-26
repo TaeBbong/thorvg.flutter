@@ -23,7 +23,7 @@ final DynamicLibrary _dylib = () {
 final ThorVGFlutterBindings tvg = ThorVGFlutterBindings(_dylib);
 
 /* ThorVG Play State */
-enum PlayState { stopped, playing, deleted }
+enum PlayerState { destroyed, error, loading, paused, playing, stopped, frozen }
 
 /* ThorVG Dart */
 
@@ -34,7 +34,7 @@ class Thorvg {
   double startTime = DateTime.now().millisecond / 1000;
   double speed = 1.0;
 
-  PlayState state = PlayState.stopped;
+  PlayerState state = PlayerState.stopped;
 
   late bool animate = false;
   late bool reverse = false;
@@ -48,7 +48,7 @@ class Thorvg {
   }
 
   Uint8List? animLoop() {
-    if (state == PlayState.deleted) {
+    if (state == PlayerState.destroyed) {
       throw Exception('Thorvg is already deleted');
     }
 
@@ -61,7 +61,7 @@ class Thorvg {
   }
 
   bool update() {
-    if (state == PlayState.deleted) {
+    if (state == PlayerState.destroyed) {
       throw Exception('Thorvg is already deleted');
     }
 
@@ -81,7 +81,7 @@ class Thorvg {
         return true;
       }
 
-      state = PlayState.stopped;
+      state = PlayerState.stopped;
       return false;
     }
 
@@ -89,7 +89,7 @@ class Thorvg {
   }
 
   Uint8List? render() {
-    if (state == PlayState.deleted) {
+    if (state == PlayerState.destroyed) {
       throw Exception('Thorvg is already deleted');
     }
 
@@ -109,7 +109,7 @@ class Thorvg {
   }
 
   void play() {
-    if (state == PlayState.deleted) {
+    if (state == PlayerState.destroyed) {
       throw Exception('Thorvg is already deleted');
     }
 
@@ -119,11 +119,11 @@ class Thorvg {
 
     totalFrame = tvg.totalFrame(animation);
     startTime = DateTime.now().millisecondsSinceEpoch / 1000;
-    state = PlayState.playing;
+    state = PlayerState.playing;
   }
 
   void load(String src, int w, int h, bool animate, bool repeat, bool reverse) {
-    if (state == PlayState.deleted) {
+    if (state == PlayerState.destroyed) {
       throw Exception('Thorvg is already deleted');
     }
 
@@ -156,12 +156,12 @@ class Thorvg {
   }
 
   void delete() {
-    if (state == PlayState.deleted) {
+    if (state == PlayerState.destroyed) {
       return;
     }
 
     if (tvg.destroy(animation)) {
-      state = PlayState.deleted;
+      state = PlayerState.destroyed;
     }
   }
 }
