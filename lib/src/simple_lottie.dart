@@ -5,7 +5,6 @@ import 'dart:io' as io;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:thorvg/src/lottie_box.dart';
 import 'package:thorvg/src/thorvg.dart' as module;
 import 'package:thorvg/src/utils.dart';
 
@@ -130,6 +129,13 @@ class _State extends State<Lottie> {
   String data = "";
   String errorMsg = "";
 
+  // JSON에서 읽은 Lottie 원본 크기
+  Size? _intrinsic;
+
+  // 마지막으로 요청한 래스터 타깃(논리 px)
+  Size? _lastRasterLogicalSize;
+
+  // ... _loadData, _tvgLoad 등은 기존 그대로 ...
   // Canvas size
   double width = 0;
   double height = 0;
@@ -138,11 +144,14 @@ class _State extends State<Lottie> {
   int lottieWidth = 0;
   int lottieHeight = 0;
 
+  // dpr
+  double dpr = 1.0;
+
   // Render size (calculated)
   double get renderWidth =>
-      (lottieWidth > width ? width : lottieWidth).toDouble();
+      (lottieWidth > width ? width : lottieWidth).toDouble() * dpr;
   double get renderHeight =>
-      (lottieHeight > height ? height : lottieHeight).toDouble();
+      (lottieHeight > height ? height : lottieHeight).toDouble() * dpr;
 
   @override
   void initState() {
@@ -187,10 +196,10 @@ class _State extends State<Lottie> {
 
   void _updateLottieSize() {
     final info = jsonDecode(data);
-
+    final w = (info['w'] ?? widget.width).toDouble();
+    final h = (info['h'] ?? widget.height).toDouble();
     setState(() {
-      lottieWidth = info['w'] ?? widget.width;
-      lottieHeight = info['h'] ?? widget.height;
+      _intrinsic = (w <= 0 || h <= 0) ? null : Size(w, h);
     });
   }
 
@@ -299,49 +308,86 @@ class _State extends State<Lottie> {
         child: ErrorWidget(errorMsg),
       );
     }
+    if (img == null) {
+      // 데이터/첫 프레임 대기
+      return const SizedBox.shrink();
+    }
 
-    final intrinsic = (lottieWidth == 0 || lottieHeight == 0)
-        ? null
-        : Size(lottieWidth.toDouble(), lottieHeight.toDouble());
+    final double? prefW = (widget.width == 0) ? null : widget.width;
+    final double? prefH = (widget.height == 0) ? null : widget.height;
 
-    return LottieBox(
-      image: img, // 매 프레임 setState로 업데이트됨
-      intrinsicSize: intrinsic, // JSON에서 읽은 원본 크기
-      preferredWidth: widget.width == 0 ? null : widget.width,
-      preferredHeight: widget.height == 0 ? null : widget.height,
-      fit: BoxFit.none, // 기존 동작과 동일(원하면 contain/cover로 변경 가능)
-      alignment: Alignment.center,
-      devicePixelRatio: MediaQuery.of(context).devicePixelRatio,
-      onNeedRaster: (logicalSize) {
-        // 레이아웃 결과에 맞춘 "래스터 목표(논리 px)"가 도달.
-        // tvg는 이 크기 기준으로 버퍼를 생성해야 함.
-        if (tvg == null || data.isEmpty) return;
+    return LayoutBuilder(
+      builder: (context, constraints0) {
+        // 1) 위젯 선호 크기를 constraints에 접어 넣기
+        var constraints = BoxConstraints.tightFor(
+          width: prefW,
+          height: prefH,
+        ).enforce(constraints0);
 
-        final int w = logicalSize.width.clamp(1.0, double.infinity).round();
-        final int h = logicalSize.height.clamp(1.0, double.infinity).round();
+        // 2) 타깃 사이즈 계산 (종횡비 보존)
+        final Size target = (_intrinsic == null)
+            ? constraints.smallest
+            : constraints
+                .constrainSizeAndAttemptToPreserveAspectRatio(_intrinsic!);
 
-        // (선택) 더 선명하게 하려면 DPR를 곱해서 픽셀 크기로 올려 그리도록
-        // final dpr = MediaQuery.of(context).devicePixelRatio;
-        // final w = (logicalSize.width * dpr).round();
-        // final h = (logicalSize.height * dpr).round();
+        // 3) 타깃이 바뀌면 tvg 재로드(래스터 크기 갱신)
+        if (_shouldRequestRaster(target)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || tvg == null || data.isEmpty) return;
 
-        try {
-          tvg!.load(
-            data,
-            w,
-            h,
-            widget.animate,
-            widget.repeat,
-            widget.reverse,
-          );
-        } catch (err) {
-          setState(() => errorMsg = err.toString());
-          return;
+            // 필요하면 DPR 반영 가능 (주석 해제)
+            // final dpr = MediaQuery.of(context).devicePixelRatio;
+            // final w = (target.width * dpr).clamp(1.0, double.infinity).round();
+            // final h = (target.height * dpr).clamp(1.0, double.infinity).round();
+
+            final w = target.width.clamp(1.0, double.infinity).round();
+            final h = target.height.clamp(1.0, double.infinity).round();
+
+            try {
+              tvg!.load(
+                data,
+                w,
+                h,
+                widget.animate,
+                widget.repeat,
+                widget.reverse,
+              );
+              _lastRasterLogicalSize = target;
+            } catch (err) {
+              setState(() => errorMsg = err.toString());
+            }
+          });
         }
-        // 이후 _tick()에서 animLoop()가 같은 크기의 버퍼를 돌려주고,
-        // decodeImage(buffer, w, h)로 디코드하면 rect와 딱 맞아떨어짐.
+
+        // 4) 그리기(이미 CustomPaint는 기존 로직 재사용)
+        return SizedBox(
+          width: target.width,
+          height: target.height,
+          child: CustomPaint(
+            painter: TVGCanvas(
+              // Canvas는 target으로 고정
+              width: target.width,
+              height: target.height,
+              // Lottie 원본(없으면 target으로 대체)
+              lottieWidth: (_intrinsic?.width ?? target.width),
+              lottieHeight: (_intrinsic?.height ?? target.height),
+              // 이번 프레임 렌더 크기 또한 target
+              renderWidth: target.width,
+              renderHeight: target.height,
+              image: img!,
+            ),
+          ),
+        );
       },
     );
+  }
+
+  bool _shouldRequestRaster(Size target) {
+    final prev = _lastRasterLogicalSize;
+    if (prev == null) return true;
+    // px 단위 흔들림 방지(디바운스) — 임계값은 상황에 맞게
+    return (prev.width - target.width).abs() >= 1.0 ||
+        (prev.height - target.height).abs() >= 1.0;
   }
 }
 
