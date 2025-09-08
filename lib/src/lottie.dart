@@ -140,11 +140,17 @@ class _State extends State<Lottie> {
   // dpr
   double dpr = 1.0;
 
+  // test target size
+  double targetWidth = 0;
+  double targetHeight = 0;
+
   // Render size (calculated)
-  double get renderWidth =>
-      (lottieWidth > width ? width : lottieWidth).toDouble() * dpr;
-  double get renderHeight =>
-      (lottieHeight > height ? height : lottieHeight).toDouble() * dpr;
+  double get renderWidth => (targetWidth == 0)
+      ? (lottieWidth > width ? width : lottieWidth).toDouble() * dpr
+      : targetWidth * dpr;
+  double get renderHeight => (targetHeight == 0)
+      ? (lottieHeight > height ? height : lottieHeight).toDouble() * dpr
+      : targetHeight * dpr;
 
   @override
   void initState() {
@@ -317,25 +323,89 @@ class _State extends State<Lottie> {
       _tvgResize();
     }
 
-    return Container(
-      width: width.toDouble(),
-      height: height.toDouble(),
-      clipBehavior: Clip.hardEdge,
-      decoration: const BoxDecoration(color: Colors.transparent),
-      child: Transform.scale(
-        scale: 1.0 / dpr,
-        child: CustomPaint(
-          painter: TVGCanvas(
-              width: width.toDouble(),
-              height: height.toDouble(),
-              lottieWidth: lottieWidth.toDouble(),
-              lottieHeight: lottieHeight.toDouble(),
-              renderWidth: renderWidth.toDouble(),
-              renderHeight: renderHeight.toDouble(),
-              image: img!),
+    // return Container(
+    //   width: width.toDouble(),
+    //   height: height.toDouble(),
+    //   clipBehavior: Clip.hardEdge,
+    //   decoration: const BoxDecoration(color: Colors.transparent),
+    //   child: Transform.scale(
+    //     scale: 1.0 / dpr,
+    //     child: CustomPaint(
+    //       painter: TVGCanvas(
+    //           width: width.toDouble(),
+    //           height: height.toDouble(),
+    //           lottieWidth: lottieWidth.toDouble(),
+    //           lottieHeight: lottieHeight.toDouble(),
+    //           renderWidth: renderWidth.toDouble(),
+    //           renderHeight: renderHeight.toDouble(),
+    //           image: img!),
+    //     ),
+    //   ),
+    // );
+
+    return LayoutBuilder(builder: (context, constraints) {
+      final double? prefW = widget.width == 0 ? null : widget.width;
+      final double? prefH = widget.height == 0 ? null : widget.height;
+
+      final BoxConstraints prefConstraints =
+          BoxConstraints.tightFor(width: prefW, height: prefH)
+              .enforce(constraints);
+
+      final Size lottieSize =
+          Size(lottieWidth.toDouble(), lottieHeight.toDouble());
+      final Size target = (lottieWidth != 0 && lottieHeight != 0)
+          ? prefConstraints
+              .constrainSizeAndAttemptToPreserveAspectRatio(lottieSize)
+          : Size(
+              prefConstraints.hasBoundedWidth
+                  ? prefConstraints.maxWidth
+                  : (prefConstraints.minWidth > 0
+                      ? prefConstraints.minWidth
+                      : 0),
+              prefConstraints.hasBoundedHeight
+                  ? prefConstraints.maxHeight
+                  : (prefConstraints.minHeight > 0
+                      ? prefConstraints.minHeight
+                      : 0),
+            );
+
+      // targetWidth, targetHeight는 현 build 단계에서만 사용되는 값으로,
+      // 초기에 선언된 상태값(0)이 바뀌는게 아님!
+      // 그냥 해당 빌드 단계에서 적절한 값이 계산되어 아래 빌드 코드에서 적용되는 것일 뿐!
+      // 그렇기 때문에 이 위에서, targetWidth에 대한 조건을 걸면 무조건 0인 것..
+      if (targetWidth != target.width || targetHeight != targetHeight) {
+        targetWidth = target.width;
+        targetHeight = target.height;
+        _tvgResize();
+      }
+
+      // 그래서 첫 프레임, 즉 targetWidth == 0인 순간에는 큰 이미지가 반짝 보이는 듯
+      if (targetWidth == 0 || targetHeight == 0) {
+        return Container();
+      }
+
+      return Container(
+        width: targetWidth.toDouble(),
+        height: targetHeight.toDouble(),
+        clipBehavior: Clip.hardEdge,
+        decoration: const BoxDecoration(color: Colors.transparent),
+        child: Transform.scale(
+          scale: 1.0 / dpr,
+          child: CustomPaint(
+            painter: TVGCanvas(
+                width: targetWidth,
+                height: targetHeight,
+                // width: width.toDouble(),
+                // height: height.toDouble(),
+                lottieWidth: lottieWidth.toDouble(),
+                lottieHeight: lottieHeight.toDouble(),
+                renderWidth: renderWidth,
+                renderHeight: renderHeight,
+                image: img!),
+          ),
         ),
-      ),
-    );
+      );
+    });
   }
 }
 
@@ -364,6 +434,8 @@ class TVGCanvas extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final left = (width - renderWidth) / 2;
     final top = (height - renderHeight) / 2;
+
+    print('[*] [paint] $width $height $renderWidth $renderHeight');
 
     paintImage(
       canvas: canvas,
