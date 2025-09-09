@@ -10,8 +10,8 @@ import 'package:thorvg/src/utils.dart';
 
 class Lottie extends StatefulWidget {
   final Future<String> data;
-  final double width;
-  final double height;
+  final double? width;
+  final double? height;
 
   final bool animate;
   final bool repeat;
@@ -45,8 +45,8 @@ class Lottie extends StatefulWidget {
     return Lottie(
       key: key,
       data: parseAsset(name, bundle, package),
-      width: width ?? 0,
-      height: height ?? 0,
+      width: width,
+      height: height,
       animate: animate ?? true,
       repeat: repeat ?? true,
       reverse: reverse ?? false,
@@ -67,8 +67,8 @@ class Lottie extends StatefulWidget {
     return Lottie(
       key: key,
       data: parseFile(file),
-      width: width ?? 0,
-      height: height ?? 0,
+      width: width,
+      height: height,
       animate: animate ?? true,
       repeat: repeat ?? true,
       reverse: reverse ?? false,
@@ -89,8 +89,8 @@ class Lottie extends StatefulWidget {
     return Lottie(
       key: key,
       data: parseMemory(bytes),
-      width: width ?? 0,
-      height: height ?? 0,
+      width: width,
+      height: height,
       animate: animate ?? true,
       repeat: repeat ?? true,
       reverse: reverse ?? false,
@@ -109,8 +109,8 @@ class Lottie extends StatefulWidget {
     return Lottie(
         key: key,
         data: parseSrc(src),
-        width: width ?? 0,
-        height: height ?? 0,
+        width: width,
+        height: height,
         animate: animate ?? true,
         repeat: repeat ?? true,
         reverse: reverse ?? false,
@@ -133,6 +133,10 @@ class _State extends State<Lottie> {
   double width = 0;
   double height = 0;
 
+  // Canvas size applied with constraints
+  double canvasWidth = 0;
+  double canvasHeight = 0;
+
   // Original size (lottie)
   int lottieWidth = 0;
   int lottieHeight = 0;
@@ -140,17 +144,13 @@ class _State extends State<Lottie> {
   // dpr
   double dpr = 1.0;
 
-  // test target size
-  double targetWidth = 0;
-  double targetHeight = 0;
-
   // Render size (calculated)
-  double get renderWidth => (targetWidth == 0)
+  double get renderWidth => (canvasWidth == 0)
       ? (lottieWidth > width ? width : lottieWidth).toDouble() * dpr
-      : targetWidth * dpr;
-  double get renderHeight => (targetHeight == 0)
+      : canvasWidth * dpr;
+  double get renderHeight => (canvasHeight == 0)
       ? (lottieHeight > height ? height : lottieHeight).toDouble() * dpr
-      : targetHeight * dpr;
+      : canvasHeight * dpr;
 
   @override
   void initState() {
@@ -203,17 +203,9 @@ class _State extends State<Lottie> {
   }
 
   void _updateCanvasSize() {
-    if (widget.width == 0 || widget.height == 0) {
-      setState(() {
-        width = lottieWidth.toDouble();
-        height = lottieHeight.toDouble();
-      });
-      return;
-    }
-
     setState(() {
-      width = widget.width;
-      height = widget.height;
+      width = widget.width ?? lottieWidth.toDouble();
+      height = widget.height ?? lottieHeight.toDouble();
     });
   }
 
@@ -302,12 +294,29 @@ class _State extends State<Lottie> {
     _scheduleTick();
   }
 
+  Size _computeCanvasSize(BoxConstraints constraints, int lw, int lh) {
+    if (lw > 0 && lh > 0) {
+      return constraints.constrainSizeAndAttemptToPreserveAspectRatio(
+        Size(lw.toDouble(), lh.toDouble()),
+      );
+    }
+
+    final double w = constraints.hasBoundedWidth
+        ? constraints.maxWidth
+        : (constraints.minWidth > 0 ? constraints.minWidth : 0);
+    final double h = constraints.hasBoundedHeight
+        ? constraints.maxHeight
+        : (constraints.minHeight > 0 ? constraints.minHeight : 0);
+
+    return Size(w, h);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (errorMsg.isNotEmpty) {
       return SizedBox(
-        width: widget.width.toDouble(),
-        height: widget.height.toDouble(),
+        width: width,
+        height: height,
         child: ErrorWidget(errorMsg),
       );
     }
@@ -323,80 +332,34 @@ class _State extends State<Lottie> {
       _tvgResize();
     }
 
-    // return Container(
-    //   width: width.toDouble(),
-    //   height: height.toDouble(),
-    //   clipBehavior: Clip.hardEdge,
-    //   decoration: const BoxDecoration(color: Colors.transparent),
-    //   child: Transform.scale(
-    //     scale: 1.0 / dpr,
-    //     child: CustomPaint(
-    //       painter: TVGCanvas(
-    //           width: width.toDouble(),
-    //           height: height.toDouble(),
-    //           lottieWidth: lottieWidth.toDouble(),
-    //           lottieHeight: lottieHeight.toDouble(),
-    //           renderWidth: renderWidth.toDouble(),
-    //           renderHeight: renderHeight.toDouble(),
-    //           image: img!),
-    //     ),
-    //   ),
-    // );
-
     return LayoutBuilder(builder: (context, constraints) {
-      final double? prefW = widget.width == 0 ? null : widget.width;
-      final double? prefH = widget.height == 0 ? null : widget.height;
-
       final BoxConstraints prefConstraints =
-          BoxConstraints.tightFor(width: prefW, height: prefH)
+          BoxConstraints.tightFor(width: width, height: height)
               .enforce(constraints);
 
-      final Size lottieSize =
-          Size(lottieWidth.toDouble(), lottieHeight.toDouble());
-      final Size target = (lottieWidth != 0 && lottieHeight != 0)
-          ? prefConstraints
-              .constrainSizeAndAttemptToPreserveAspectRatio(lottieSize)
-          : Size(
-              prefConstraints.hasBoundedWidth
-                  ? prefConstraints.maxWidth
-                  : (prefConstraints.minWidth > 0
-                      ? prefConstraints.minWidth
-                      : 0),
-              prefConstraints.hasBoundedHeight
-                  ? prefConstraints.maxHeight
-                  : (prefConstraints.minHeight > 0
-                      ? prefConstraints.minHeight
-                      : 0),
-            );
+      final Size canvasSize =
+          _computeCanvasSize(prefConstraints, lottieWidth, lottieHeight);
 
-      // targetWidth, targetHeight는 현 build 단계에서만 사용되는 값으로,
-      // 초기에 선언된 상태값(0)이 바뀌는게 아님!
-      // 그냥 해당 빌드 단계에서 적절한 값이 계산되어 아래 빌드 코드에서 적용되는 것일 뿐!
-      // 그렇기 때문에 이 위에서, targetWidth에 대한 조건을 걸면 무조건 0인 것..
-      if (targetWidth != target.width || targetHeight != targetHeight) {
-        targetWidth = target.width;
-        targetHeight = target.height;
-        _tvgResize();
-      }
-
-      // 그래서 첫 프레임, 즉 targetWidth == 0인 순간에는 큰 이미지가 반짝 보이는 듯
-      if (targetWidth == 0 || targetHeight == 0) {
-        return Container();
+      if (canvasWidth != canvasSize.width ||
+          canvasHeight != canvasSize.height) {
+        canvasWidth = canvasSize.width;
+        canvasHeight = canvasSize.height;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _tvgResize();
+        });
       }
 
       return Container(
-        width: targetWidth.toDouble(),
-        height: targetHeight.toDouble(),
+        width: canvasWidth,
+        height: canvasHeight,
         clipBehavior: Clip.hardEdge,
         decoration: const BoxDecoration(color: Colors.transparent),
         child: Transform.scale(
           scale: 1.0 / dpr,
           child: CustomPaint(
             painter: TVGCanvas(
-                width: targetWidth,
-                height: targetHeight,
-                // width: width.toDouble(),
-                // height: height.toDouble(),
+                width: canvasWidth,
+                height: canvasHeight,
                 lottieWidth: lottieWidth.toDouble(),
                 lottieHeight: lottieHeight.toDouble(),
                 renderWidth: renderWidth,
@@ -434,8 +397,6 @@ class TVGCanvas extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final left = (width - renderWidth) / 2;
     final top = (height - renderHeight) / 2;
-
-    print('[*] [paint] $width $height $renderWidth $renderHeight');
 
     paintImage(
       canvas: canvas,
